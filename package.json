@@ -1,0 +1,17 @@
+{
+  "name": "etsy-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "tsc && node ./build/app.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cheerio": "*",
+    "csvtojson": "^2.0.10",
+    "got": "^11.8.2"
+  }
+}
