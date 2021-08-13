@@ -63,7 +63,7 @@ const fetchSession = async(task: Task): Promise<void> => {
     await driver.switchTo().window(tabs[1])
 
     // select random variations from dropdowns
-    const dropdowns = await driver.findElements(By.css("select[id*='variation-select-']"))
+    const dropdowns = await driver.findElements(By.css("select[id^='variation-select-']"))
 
     for (let i = 0; i < dropdowns.length; i++) {
         await driver.wait(until.elementIsEnabled(driver.findElement(By.css(`select[id='variation-select-${i}']`))), 5000)
@@ -83,18 +83,28 @@ const fetchSession = async(task: Task): Promise<void> => {
     const logs = await driver.manage().logs().get('performance')
 
     for (let i = 0; i < logs.length; i++) {
-        if (logs[i].message.includes('_nnc') && (logs[i].message.includes('https://www.etsy.com/cart/listing.php') || logs[i].message.includes('https://www.etsy.com/api/v3/ajax/member/carts/add'))) {
+        if ((logs[i].message.includes('https://www.etsy.com/cart/listing.php') || logs[i].message.includes('https://www.etsy.com/api/v3/ajax/member/carts/add'))) {
             const logMessage = JSON.parse(logs[i].message)
             task.uaid = (await driver.manage().getCookie('uaid')).value
-            try {
-                const requestBody = JSON.parse(logMessage.message.params.request.postData)
-                task.csrfToken = (requestBody['_nnc'])
-            } catch (error) {
-                const requestBody = new URLSearchParams(logMessage.message.params.request.postData)
-                task.csrfToken = (requestBody.get('_nnc')) || ''
+            if (logs[i].message.includes('_nnc')) {
+                try {
+                    const requestBody = JSON.parse(logMessage.message.params.request.postData)
+                    task.csrfToken = (requestBody['_nnc'])
+                } catch (error) {
+                    const requestBody = new URLSearchParams(logMessage.message.params.request.postData)
+                    task.csrfToken = (requestBody.get('_nnc')) || ''
+                }
+            } else if(logs[i].message.includes('x-csrf-token')) {
+                task.csrfToken = (logMessage.message.params.request.headers['x-csrf-token'])
             }
-
         }
+    }
+
+    try {
+        await driver.wait(until.elementIsVisible(driver.findElement(By.css("a[data-selector='atc-overlay-go-to-cart-button']"))))
+        await driver.findElement(By.css("a[data-selector='atc-overlay-go-to-cart-button']")).click()   
+    } catch (error) {
+        console.log('Straight to cart')
     }
 
     // remove from cart
@@ -105,7 +115,7 @@ const fetchSession = async(task: Task): Promise<void> => {
 }
 
 const addToCart = async(task: Task) => {
-    const response = await got.post(
+    const response = (await got.post(
         'https://www.etsy.com/api/v3/ajax/member/carts/add', 
         {
             headers: {
@@ -119,9 +129,12 @@ const addToCart = async(task: Task) => {
                 listing_inventory_id: task.inventoryId,
                 'variations%5B%5D': task.variant
             }
-        })
+        })).body as AtcResponse
     
-    console.log(response.body)
+    console.log(response)
+    if (response.cart_count == 0) {
+        throw Error('ATC failed')
+    }
 }
 
 (async() => {

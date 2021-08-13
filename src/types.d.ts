@@ -16,3 +16,9 @@ interface OfferingResponse {
     klarna_osm_messaging: string,
     variations: string
 }
+
+interface AtcResponse {
+    cart_count: number,
+    cart_tipper_html: string,
+    is_cart_threshold_met: boolean
+}
