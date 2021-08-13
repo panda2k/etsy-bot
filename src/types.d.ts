@@ -5,7 +5,9 @@ interface Task {
     useProxies: boolean,
     inventoryId?: string,
     listingId?: string,
-    variant?: string
+    variant?: string,
+    uaid?: string,
+    csrfToken?: string
 }
 
 interface OfferingResponse {
