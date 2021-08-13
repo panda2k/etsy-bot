@@ -40,7 +40,7 @@ const fetchProduct = async(task: Task) => {
     task.inventoryId = await getInventoryId(task.listingId, task.variant)
 }
 
-const fetchSession = async(task: Task): Promise<string> => {
+const fetchSession = async(task: Task): Promise<void> => {
     // set up network logging to intercept csrf token
     const chromeOptions = new Options
     const loggingPreferences = new Preferences()
@@ -102,16 +102,32 @@ const fetchSession = async(task: Task): Promise<string> => {
     await driver.findElement(By.css("a[aria-label='Remove listing']")).click()
 
     //await driver.quit()
-    return 'hello'
 }
 
 const addToCart = async(task: Task) => {
+    const response = await got.post(
+        'https://www.etsy.com/api/v3/ajax/member/carts/add', 
+        {
+            headers: {
+                cookie: `uaid=${task.uaid};`,
+                'x-csrf-token': task.csrfToken
+            },
+            responseType: 'json',
+            json: {
+                listing_id: task.listingId,
+                quantity: task.quantity,
+                listing_inventory_id: task.inventoryId,
+                'variations%5B%5D': task.variant
+            }
+        })
     
+    console.log(response.body)
 }
 
 (async() => {
     const tasks = await loadTasks()
-    //console.log(await fetchProduct(tasks[0]))
+    await fetchProduct(tasks[0])
     await fetchSession(tasks[0])
+    await addToCart(tasks[0])
     console.log(tasks[0])
 })()
