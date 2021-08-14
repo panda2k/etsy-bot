@@ -111,11 +111,13 @@ const fetchSession = async(task: Task): Promise<void> => {
     await driver.wait(until.elementIsEnabled(driver.findElement(By.css("a[aria-label='Remove listing']"))))
     await driver.findElement(By.css("a[aria-label='Remove listing']")).click()
 
+    task.cartId = (new URLSearchParams((await driver.getCurrentUrl()).split('?')[1]).get('show_cart')) || ''
+
     //await driver.quit()
 }
 
 const addToCart = async(task: Task) => {
-    const response = (await got.post(
+    const response = await got.post(
         'https://www.etsy.com/api/v3/ajax/member/carts/add', 
         {
             headers: {
@@ -129,10 +131,13 @@ const addToCart = async(task: Task) => {
                 listing_inventory_id: task.inventoryId,
                 'variations%5B%5D': task.variant
             }
-        })).body as AtcResponse
+        }
+    )
     
-    console.log(response)
-    if (response.cart_count == 0) {
+    const responseBody = response.body as AtcResponse
+
+    console.log(responseBody)
+    if (responseBody.cart_count == 0) {
         throw Error('ATC failed')
     }
 }

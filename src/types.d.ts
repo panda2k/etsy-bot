@@ -8,6 +8,7 @@ interface Task {
     variant?: string,
     uaid?: string,
     csrfToken?: string
+    cartId?: string
 }
 
 interface OfferingResponse {
