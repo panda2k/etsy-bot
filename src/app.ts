@@ -8,9 +8,23 @@ import { Preferences } from 'selenium-webdriver/lib/logging'
 import { logging } from 'selenium-webdriver'
 
 const tasksPath = './data/tasks.csv'
+const profilesPath = './data/profiles.csv'
 
 const loadTasks = async(): Promise<Array<Task>> => {
-    return await csv({checkType: true}).fromFile(tasksPath)
+    const tasks: Array<Task> = await csv({checkType: true}).fromFile(tasksPath)
+    const profiles: Array<BillingProfile> = await csv({checkType: true}).fromFile(profilesPath)
+
+    for (let i = 0; i < tasks.length; i++) {
+        for (let j = 0; j < tasks.length; j++) {
+            if (tasks[i].profileName == profiles[j].profile_name) {
+                tasks[i].profile = profiles[j]
+            }
+        }
+    }
+
+    console.log(tasks)
+
+    return tasks
 }
 
 const getInventoryId = async(listingId: string, variant: string) => {

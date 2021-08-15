@@ -8,7 +8,9 @@ interface Task {
     variant?: string,
     uaid?: string,
     csrfToken?: string
-    cartId?: string
+    cartId?: string,
+    profile: BillingProfile,
+    profileName: string
 }
 
 interface OfferingResponse {
@@ -22,4 +24,17 @@ interface AtcResponse {
     cart_count: number,
     cart_tipper_html: string,
     is_cart_threshold_met: boolean
+}
+
+interface BillingProfile {
+    profile_name: string,
+    country_id: number,
+    name: string,
+    first_line: string,
+    street_name: string,
+    second_line: string,
+    city: string,
+    state: string,
+    zip: string,
+    phone: string
 }
