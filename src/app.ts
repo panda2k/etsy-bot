@@ -22,8 +22,6 @@ const loadTasks = async(): Promise<Array<Task>> => {
         }
     }
 
-    console.log(tasks)
-
     return tasks
 }
 
@@ -93,11 +91,25 @@ const fetchSession = async(task: Task): Promise<void> => {
     }
     await driver.findElement(By.xpath("//button[contains(string(), 'Add to cart')]")).click()
 
+    // get checkout
+    try {
+        await driver.wait(until.elementIsVisible(driver.findElement(By.css("a[data-selector='atc-overlay-go-to-cart-button']"))))
+        await driver.findElement(By.css("a[data-selector='atc-overlay-go-to-cart-button']")).click()   
+    } catch (error) {
+        console.log('Straight to cart')
+    }
+
+    await driver.wait(until.elementIsEnabled(driver.findElement(By.className('proceed-to-checkout'))))
+    await driver.findElement(By.className('proceed-to-checkout')).click()
+
+    await driver.wait(until.elementLocated((By.xpath('//button[contains(string(), "Continue as a guest")]'))), 5000)
+    await driver.findElement(By.xpath('//button[contains(string(), "Continue as a guest")]')).click()
+
     // get csrf token and uaid
     const logs = await driver.manage().logs().get('performance')
 
     for (let i = 0; i < logs.length; i++) {
-        if ((logs[i].message.includes('https://www.etsy.com/cart/listing.php') || logs[i].message.includes('https://www.etsy.com/api/v3/ajax/member/carts/add'))) {
+        if ((logs[i].message.includes('payment_method=cc'))) {
             const logMessage = JSON.parse(logs[i].message)
             task.uaid = (await driver.manage().getCookie('uaid')).value
             if (logs[i].message.includes('_nnc')) {
@@ -108,24 +120,14 @@ const fetchSession = async(task: Task): Promise<void> => {
                     const requestBody = new URLSearchParams(logMessage.message.params.request.postData)
                     task.csrfToken = (requestBody.get('_nnc')) || ''
                 }
-            } else if(logs[i].message.includes('x-csrf-token')) {
-                task.csrfToken = (logMessage.message.params.request.headers['x-csrf-token'])
             }
         }
     }
 
-    try {
-        await driver.wait(until.elementIsVisible(driver.findElement(By.css("a[data-selector='atc-overlay-go-to-cart-button']"))))
-        await driver.findElement(By.css("a[data-selector='atc-overlay-go-to-cart-button']")).click()   
-    } catch (error) {
-        console.log('Straight to cart')
-    }
-
     // remove from cart
+    await driver.get('https://www.etsy.com/cart')
     await driver.wait(until.elementIsEnabled(driver.findElement(By.css("a[aria-label='Remove listing']"))))
     await driver.findElement(By.css("a[aria-label='Remove listing']")).click()
-
-    task.cartId = (new URLSearchParams((await driver.getCurrentUrl()).split('?')[1]).get('show_cart')) || ''
 
     //await driver.quit()
 }
@@ -150,10 +152,72 @@ const addToCart = async(task: Task) => {
     
     const responseBody = response.body as AtcResponse
 
-    console.log(responseBody)
+    //console.log(responseBody)
     if (responseBody.cart_count == 0) {
         throw Error('ATC failed')
     }
+
+    const getCartResponse = await got(
+        'https://www.etsy.com/cart',
+        {
+            headers: {
+                cookie: `uaid=${task.uaid};`
+            }
+        }
+    )
+
+    const html = cheerio.load(getCartResponse.body)
+    task.cartId = html('input[name="cart_ids[]"]').first().attr().value
+}
+
+const checkout = async(task: Task) => {
+    // initiate checkout
+    const initiateCheckoutResponse = await got.post(
+        `https://www.etsy.com/cart/${task.cartId}/checkout/?payment_method=cc`,
+        {
+            headers: {
+                cookie: `uaid=${task.uaid};`
+            },
+            form: {
+                guest_checkout: 1,
+                '_nnc': task.csrfToken,
+            }
+        }
+    ).then(response => {
+        console.log(response.body)
+    })
+    .catch(error => {
+        console.log(error.response.body)
+    })
+
+    /*const verifyAddressResponse = await got.post(
+        `https://www.etsy.com/api/v3/ajax/public/addresses/validate`,
+        {
+            headers: {
+                cookie: `uaid=${task.uaid}`
+            },
+            json: {
+                address: {
+                    country_id: task.profile.country_id,
+                    name: task.profile.name,
+                    first_line: task.profile.first_line,
+                    street_name: task.profile.street_name || '',
+                    street_number: '',
+                    second_line: task.profile.second_line,
+                    city: task.profile.city,
+                    state: task.profile.state,
+                    zip: task.profile.zip,
+                    phone: task.profile.phone,
+                    is_default_shipping: false,
+                    verification_state: 0,
+                },
+                field_name: 'state',
+                restrict_to_installments_billing_countries: false
+            }
+        }
+    )
+
+    console.log(verifyAddressResponse)*/
 }
 
 (async() => {
@@ -162,4 +226,5 @@ const addToCart = async(task: Task) => {
     await fetchSession(tasks[0])
     await addToCart(tasks[0])
     console.log(tasks[0])
+    await checkout(tasks[0])
 })()
