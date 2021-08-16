@@ -183,41 +183,9 @@ const checkout = async(task: Task) => {
                 '_nnc': task.csrfToken,
             }
         }
-    ).then(response => {
-        console.log(response.body)
-    })
-    .catch(error => {
-        console.log(error.response.body)
-    })
-
-    /*const verifyAddressResponse = await got.post(
-        `https://www.etsy.com/api/v3/ajax/public/addresses/validate`,
-        {
-            headers: {
-                cookie: `uaid=${task.uaid}`
-            },
-            json: {
-                address: {
-                    country_id: task.profile.country_id,
-                    name: task.profile.name,
-                    first_line: task.profile.first_line,
-                    street_name: task.profile.street_name || '',
-                    street_number: '',
-                    second_line: task.profile.second_line,
-                    city: task.profile.city,
-                    state: task.profile.state,
-                    zip: task.profile.zip,
-                    phone: task.profile.phone,
-                    is_default_shipping: false,
-                    verification_state: 0,
-                },
-                field_name: 'state',
-                restrict_to_installments_billing_countries: false
-            }
-        }
     )
 
-    console.log(verifyAddressResponse)*/
+    task.guestToken = initiateCheckoutResponse.body.match(/guest_token"\s*:\s*"(.+?)"/)![1]
 }
 
 (async() => {
@@ -225,6 +193,6 @@ const checkout = async(task: Task) => {
     await fetchProduct(tasks[0])
     await fetchSession(tasks[0])
     await addToCart(tasks[0])
-    console.log(tasks[0])
     await checkout(tasks[0])
+    console.log(tasks[0])
 })()

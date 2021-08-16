@@ -10,7 +10,8 @@ interface Task {
     csrfToken?: string
     cartId?: string,
     profile: BillingProfile,
-    profileName: string
+    profileName: string,
+    guestToken?: string
 }
 
 interface OfferingResponse {
