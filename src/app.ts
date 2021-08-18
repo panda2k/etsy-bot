@@ -186,6 +186,40 @@ const checkout = async(task: Task) => {
     )
 
     task.guestToken = initiateCheckoutResponse.body.match(/guest_token"\s*:\s*"(.+?)"/)![1]
+
+    const submitShippingResponse = await got.post(
+        `https://www.etsy.com/api/v3/ajax/public/guest/${task.guestToken}/cart/${task.cartId}/address/shipping`,
+        //`https://enxphblmmtwyis.m.pipedream.net`,
+        {
+            headers: {
+                'x-csrf-token': task.csrfToken,
+                cookie: `uaid=${task.uaid};`
+            },
+            form: {
+                'address[country_id]': task.profile.country_id,
+                'address[name]': task.profile.name,
+                'address[first_line]': task.profile.first_line,
+                'address[second_line]': task.profile.second_line || '',
+                'address[city]': task.profile.city,
+                'address[state]': task.profile.state,
+                'address[zip]': task.profile.zip,
+                'address[phone]': task.profile.phone || '',
+                'address[is_default_shipping]': false,
+                'address[verification_state]': 5,
+                email: task.profile.email,
+                'messages_to_seller[0][cart_id]': task.cartId,
+                'messages_to_seller[0][message]': '',
+                'gift_messages[0][message]': '',
+                submit_blocker_checked: false,
+                submit_blocker_klarna: false,
+                supports_google_pay: false,
+                marketing_opt_in_checked: true,
+                dark_mode: false,
+                cart_id: task.cartId,
+            },
+            responseType: 'json'
+        }
+    )
 }
 
 (async() => {

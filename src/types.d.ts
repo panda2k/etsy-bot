@@ -37,5 +37,6 @@ interface BillingProfile {
     city: string,
     state: string,
     zip: string,
-    phone: string
+    phone: string,
+    email: string
 }
