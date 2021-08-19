@@ -1,2 +1,2 @@
-profile_name,country_id,name,first_line,street_name,street_number,second_line,city,state,zip,phone,email
-test,209,Test Person,Test Street,Portland,OR,98111,1234567890,WA,12345,,test@gmail.com
+profile_name,country_id,name,first_line,street_name,street_number,second_line,city,state,zip,phone,email,card_number,exp_month,exp_year,cvv
+test,209,Test Person,Test Street,Portland,OR,98111,1234567890,WA,12345,,test@gmail.com,4242424242424242,7,2023,371

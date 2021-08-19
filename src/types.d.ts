@@ -11,7 +11,8 @@ interface Task {
     cartId?: string,
     profile: BillingProfile,
     profileName: string,
-    guestToken?: string
+    guestToken?: string,
+    paymentToken?: string
 }
 
 interface OfferingResponse {
@@ -38,5 +39,9 @@ interface BillingProfile {
     state: string,
     zip: string,
     phone: string,
-    email: string
+    email: string,
+    card_number: number,
+    exp_month: number,
+    exp_year: number,
+    cvv: number
 }
