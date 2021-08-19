@@ -171,6 +171,8 @@ const addToCart = async(task: Task) => {
 }
 
 const checkout = async(task: Task) => {
+    console.log('Start checkout')
+
     // initiate checkout
     const initiateCheckoutResponse = await got.post(
         `https://www.etsy.com/cart/${task.cartId}/checkout/?payment_method=cc`,
@@ -186,7 +188,8 @@ const checkout = async(task: Task) => {
     )
 
     task.guestToken = initiateCheckoutResponse.body.match(/guest_token"\s*:\s*"(.+?)"/)![1]
-
+    console.log('Fetched task guest token')
+    
     const submitShippingResponse = await got.post(
         `https://www.etsy.com/api/v3/ajax/public/guest/${task.guestToken}/cart/${task.cartId}/address/shipping`,
         //`https://enxphblmmtwyis.m.pipedream.net`,
@@ -220,6 +223,66 @@ const checkout = async(task: Task) => {
             responseType: 'json'
         }
     )
+
+    console.log('Submitted shipping')
+
+    const getPaymentTokenResponse = await got(
+        `https://www.etsy.com/api/v3/ajax/public/guest/payments/user-id-params?cart_id=${task.cartId}&guest_token=${task.guestToken}`,
+        {
+            headers: {
+                cookie: `uaid=${task.uaid};`
+            }
+        }
+    )
+
+    task.paymentToken = getPaymentTokenResponse.body.replace('"', '')
+
+    console.log('Got payment token 1')
+
+    // TODO fix 429 error here. maybe it is because csrf token was used too many times?
+    const tokenizePaymentResponse = await got.post(
+        `https://prod.etsypayments.com/tokenize`,
+        {
+            form: {
+                card_number: task.profile.card_number,
+                card_cvc: task.profile.cvv,
+                card_name: task.profile.name,
+                card_expiration_month: task.profile.exp_month,
+                card_expiration_year: task.profile.exp_year,
+                nonce: task.csrfToken,
+                user_id_params: task.paymentToken
+            },
+            responseType: 'json'
+        }
+    ).catch(error => {
+        console.log(error.response)
+    }) as any
+
+    task.paymentToken = tokenizePaymentResponse.body.data
+
+    console.log('Got payment token 2')
+
+    const submitPaymentResponse = await got.post(
+        `https://www.etsy.com/api/v3/ajax/public/guest/${task.guestToken}/cart/${task.cartId}/credit-card`,
+        {
+            headers: {
+                cookie: `uaid=${task.uaid};`
+            },
+            form: {
+                '_nnc': task.csrfToken,
+                icht_response: task.paymentToken,
+                'card[exp_mon]': task.profile.exp_month,
+                'card[exp_year]': task.profile.exp_year,
+                'card[name]': task.profile.name,
+                'save_card': true,
+                is_default_card: false,
+                cart_id: task.cartId
+            },
+            responseType: 'json'
+        }
+    )
+
+    console.log(submitPaymentResponse.body)
 }
 
 (async() => {
