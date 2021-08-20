@@ -12,7 +12,8 @@ interface Task {
     profile: BillingProfile,
     profileName: string,
     guestToken?: string,
-    paymentToken?: string
+    paymentToken?: string,
+    got: Got
 }
 
 interface OfferingResponse {

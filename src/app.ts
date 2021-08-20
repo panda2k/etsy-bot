@@ -1,18 +1,35 @@
-import got from 'got'
+import got, { Got } from 'got'
 import csv from 'csvtojson'
 import cheerio from 'cheerio'
 require('chromedriver')
-import { Builder, By, until } from 'selenium-webdriver'
+import { Builder, By, until, WebDriver } from 'selenium-webdriver'
 import { Options } from 'selenium-webdriver/chrome'
 import { Preferences } from 'selenium-webdriver/lib/logging'
 import { logging } from 'selenium-webdriver'
+import { HttpsProxyAgent } from 'hpagent'
+import { readFileSync } from 'fs'
 
 const tasksPath = './data/tasks.csv'
 const profilesPath = './data/profiles.csv'
+const proxiesPath = './data/proxies.txt'
+
+const createWebdriver = async(): Promise<WebDriver> => {
+    // set up network logging to intercept csrf token
+    const chromeOptions = new Options
+    const loggingPreferences = new Preferences()
+    loggingPreferences.setLevel(logging.Type.PERFORMANCE, logging.Level.ALL)
+
+    chromeOptions.setLoggingPrefs(loggingPreferences)
+    chromeOptions.setPerfLoggingPrefs({enableNetwork: true})
+    const driver = await new Builder().forBrowser('chrome').setChromeOptions(chromeOptions).build()
+
+    return driver
+}
 
 const loadTasks = async(): Promise<Array<Task>> => {
     const tasks: Array<Task> = await csv({checkType: true}).fromFile(tasksPath)
     const profiles: Array<BillingProfile> = await csv({checkType: true}).fromFile(profilesPath)
+    const proxies: Array<string> = readFileSync(proxiesPath).toString('utf-8').split('\n')
 
     for (let i = 0; i < tasks.length; i++) {
         for (let j = 0; j < tasks.length; j++) {
@@ -20,12 +37,35 @@ const loadTasks = async(): Promise<Array<Task>> => {
                 tasks[i].profile = profiles[j]
             }
         }
+        if (tasks[i].useProxies) {
+            const taskProxy = proxies[i % proxies.length].split(':')
+            console.log(`https://${taskProxy[2]}:${taskProxy[3]}@${taskProxy[0]}:${taskProxy[1]}`)
+            tasks[i].got = got.extend({
+                agent: {
+                    https: new HttpsProxyAgent({
+                        keepAlive: true,
+                        maxSockets: 256,
+                        maxFreeSockets: 256,
+                        scheduling: 'fifo',
+                        proxy: `http://${taskProxy[2]}:${taskProxy[3]}@${taskProxy[0]}:${taskProxy[1]}`
+                    })
+                }
+            })
+        } else {
+            tasks[i].got = got.extend()
+        }
     }
 
     return tasks
 }
 
-const getInventoryId = async(listingId: string, variant: string) => {
+const testTaskConnection = async(task: Task) => {
+    console.log((await task.got('https://api.ipify.org?format=json', { responseType: 'json' })).body)
+    await task.got('https://etsy.com')
+}
+
+const getInventoryId = async(got: Got, listingId: string, variant: string) => {
+    console.log('Get inventory id')
     const response = (await got(
             `https://www.etsy.com/api/v3/ajax/bespoke/member/listings/${listingId}/offerings/find-by-variations?listing_variation_ids%5B%5D=${variant}`, 
             {responseType: 'json'}
@@ -37,7 +77,8 @@ const getInventoryId = async(listingId: string, variant: string) => {
 }
 
 const fetchProduct = async(task: Task) => {
-    const html = (await got(task.productLink)).body
+    console.log('Fetch product')
+    const html = (await task.got(task.productLink)).body
 
     const pageContent = cheerio.load(html)
 
@@ -49,19 +90,10 @@ const fetchProduct = async(task: Task) => {
     }
 
     task.listingId = pageContent('input[name="listing_id"]').first().attr().value
-    task.inventoryId = await getInventoryId(task.listingId, task.variant)
+    task.inventoryId = await getInventoryId(task.got, task.listingId, task.variant)
 }
 
-const fetchSession = async(task: Task): Promise<void> => {
-    // set up network logging to intercept csrf token
-    const chromeOptions = new Options
-    const loggingPreferences = new Preferences()
-    loggingPreferences.setLevel(logging.Type.PERFORMANCE, logging.Level.ALL)
-
-    chromeOptions.setLoggingPrefs(loggingPreferences)
-    chromeOptions.setPerfLoggingPrefs({enableNetwork: true})
-    const driver = await new Builder().forBrowser('chrome').setChromeOptions(chromeOptions).build()
-
+const fetchSession = async(task: Task, driver: WebDriver): Promise<void> => {
     await driver.get('https://etsy.com')
 
     // click first popular product
@@ -133,7 +165,7 @@ const fetchSession = async(task: Task): Promise<void> => {
 }
 
 const addToCart = async(task: Task) => {
-    const response = await got.post(
+    const response = await task.got.post(
         'https://www.etsy.com/api/v3/ajax/member/carts/add', 
         {
             headers: {
@@ -157,7 +189,7 @@ const addToCart = async(task: Task) => {
         throw Error('ATC failed')
     }
 
-    const getCartResponse = await got(
+    const getCartResponse = await task.got(
         'https://www.etsy.com/cart',
         {
             headers: {
@@ -174,7 +206,7 @@ const checkout = async(task: Task) => {
     console.log('Start checkout')
 
     // initiate checkout
-    const initiateCheckoutResponse = await got.post(
+    const initiateCheckoutResponse = await task.got.post(
         `https://www.etsy.com/cart/${task.cartId}/checkout/?payment_method=cc`,
         {
             headers: {
@@ -190,9 +222,8 @@ const checkout = async(task: Task) => {
     task.guestToken = initiateCheckoutResponse.body.match(/guest_token"\s*:\s*"(.+?)"/)![1]
     console.log('Fetched task guest token')
     
-    const submitShippingResponse = await got.post(
+    const submitShippingResponse = await task.got.post(
         `https://www.etsy.com/api/v3/ajax/public/guest/${task.guestToken}/cart/${task.cartId}/address/shipping`,
-        //`https://enxphblmmtwyis.m.pipedream.net`,
         {
             headers: {
                 'x-csrf-token': task.csrfToken,
@@ -226,7 +257,7 @@ const checkout = async(task: Task) => {
 
     console.log('Submitted shipping')
 
-    const getPaymentTokenResponse = await got(
+    const getPaymentTokenResponse = await task.got(
         `https://www.etsy.com/api/v3/ajax/public/guest/payments/user-id-params?cart_id=${task.cartId}&guest_token=${task.guestToken}`,
         {
             headers: {
@@ -237,10 +268,17 @@ const checkout = async(task: Task) => {
 
     task.paymentToken = getPaymentTokenResponse.body.replace('"', '')
 
-    console.log('Got payment token 1')
+    console.log('task.got payment token 1')
+
+    const tokenizeOptionsResponse = await task.got(
+        `https://prod.etsypayments.com/tokenize`,
+        {
+            'method': 'OPTIONS'
+        }
+    )
 
     // TODO fix 429 error here. maybe it is because csrf token was used too many times?
-    const tokenizePaymentResponse = await got.post(
+    const tokenizePaymentResponse = await task.got.post(
         `https://prod.etsypayments.com/tokenize`,
         {
             form: {
@@ -254,15 +292,13 @@ const checkout = async(task: Task) => {
             },
             responseType: 'json'
         }
-    ).catch(error => {
-        console.log(error.response)
-    }) as any
+    ) as any
 
     task.paymentToken = tokenizePaymentResponse.body.data
 
     console.log('Got payment token 2')
 
-    const submitPaymentResponse = await got.post(
+    const submitPaymentResponse = await task.got.post(
         `https://www.etsy.com/api/v3/ajax/public/guest/${task.guestToken}/cart/${task.cartId}/credit-card`,
         {
             headers: {
@@ -286,9 +322,11 @@ const checkout = async(task: Task) => {
 }
 
 (async() => {
+    const driver = await createWebdriver()
     const tasks = await loadTasks()
+    await testTaskConnection(tasks[0])
+    await fetchSession(tasks[0], driver)
     await fetchProduct(tasks[0])
-    await fetchSession(tasks[0])
     await addToCart(tasks[0])
     await checkout(tasks[0])
     console.log(tasks[0])
