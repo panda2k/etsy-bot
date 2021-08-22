@@ -1,21 +1,3 @@
-interface Task {
-    productLink: string,
-    variantKeyword: string,
-    quantity: number,
-    useProxies: boolean,
-    inventoryId?: string,
-    listingId?: string,
-    variant?: string,
-    uaid?: string,
-    csrfToken?: string
-    cartId?: string,
-    profile: BillingProfile,
-    profileName: string,
-    guestToken?: string,
-    paymentToken?: string,
-    got: Got
-}
-
 interface OfferingResponse {
     buttons: string,
     price: string,
@@ -27,6 +9,14 @@ interface AtcResponse {
     cart_count: number,
     cart_tipper_html: string,
     is_cart_threshold_met: boolean
+}
+
+interface CsvTask {
+    productLink: string,
+    variantKeyword: string,
+    quantity: number,
+    useProxies: boolean,
+    profileName: string,
 }
 
 interface BillingProfile {
