@@ -85,9 +85,9 @@ export class Task {
         try {
             await driver.wait(until.elementIsEnabled(driver.findElement(By.xpath("//button[contains(string(), 'Add to cart')]"))))
         } catch (error) {
-            await driver.wait(until.elementIsEnabled(driver.findElement(By.xpath("//button[contains(string(), 'Add to cart')]"))))   
-        }
-        await driver.findElement(By.xpath("//button[contains(string(), 'Add to cart')]")).click()
+            await driver.wait(until.elementIsEnabled(driver.findElement(By.xpath("//button[contains(string(), 'Add to cart')]")))) 
+            await driver.findElement(By.xpath("//button[contains(string(), 'Add to cart')]")).click()  
+        }   
     
         // get checkout
         try {
@@ -145,12 +145,16 @@ export class Task {
         const html = (await this.got(this.productLink)).body
     
         const pageContent = cheerio.load(html)
-    
-        if (this.variantKeyword) {
-            this.variant = pageContent(`#variation-select-0 option:contains(${this.variantKeyword})`).first().attr().value
-        } else {
-            const children = pageContent('#variation-select-0').children('')
-            this.variant = children[Math.floor(Math.random() * children.length) + 1].attribs.value
+        
+        try {
+            if (this.variantKeyword) {
+                this.variant = pageContent(`#variation-select-0 option:contains(${this.variantKeyword})`).first().attr().value
+            } else {
+                const children = pageContent('#variation-select-0').children('')
+                this.variant = children[Math.floor(Math.random() * children.length) + 1].attribs.value
+            }
+        } catch (error) {
+            throw new Error('No variants available')
         }
     
         this.listingId = pageContent('input[name="listing_id"]').first().attr().value

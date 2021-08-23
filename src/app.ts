@@ -31,7 +31,7 @@ const loadTasks = async(): Promise<Array<Task>> => {
     const proxies: Array<string> = readFileSync(proxiesPath).toString('utf-8').split('\n')
 
     for (let i = 0; i < importedTasks.length; i++) {
-        for (let j = 0; j < importedTasks.length; j++) {
+        for (let j = 0; j < profiles.length; j++) {
             let taskProfile
             if (importedTasks[i].profileName == profiles[j].profile_name) {
                 taskProfile = profiles[j]
@@ -57,8 +57,16 @@ const loadTasks = async(): Promise<Array<Task>> => {
 
 const taskFlow = async(driver: WebDriver, task: Task): Promise<void> => {
     await task.testTaskConnection()
-    await task.fetchSession(driver),
-    await task.fetchProduct()
+    await task.fetchSession(driver)
+    while (true) {
+        try {
+            await task.fetchProduct()
+            break
+        } catch (error) {
+            task.log('No variants available')
+            await new Promise(r => setTimeout(r, 3500));
+        }
+    }
     await task.addToCart()
     await task.checkout()
 }
