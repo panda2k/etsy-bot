@@ -1,4 +1,3 @@
-import got, { Got } from 'got'
 import csv from 'csvtojson'
 require('chromedriver')
 import { Builder, By, until, WebDriver } from 'selenium-webdriver'
@@ -6,7 +5,6 @@ import { Options } from 'selenium-webdriver/chrome'
 import { Preferences } from 'selenium-webdriver/lib/logging'
 import { logging } from 'selenium-webdriver'
 import { readFileSync } from 'fs'
-import { randomBytes } from 'crypto'
 import { Task } from './classes'
 
 const tasksPath = './data/tasks.csv'
