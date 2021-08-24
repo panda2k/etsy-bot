@@ -3,6 +3,7 @@ import got, { Got } from "got"
 import { HttpsProxyAgent } from 'hpagent'
 import cheerio from 'cheerio'
 import { By, until, WebDriver } from "selenium-webdriver"
+import { URLSearchParams } from "url"
 
 export class Task {
     id: string
@@ -199,9 +200,7 @@ export class Task {
         this.cartId = html('input[name="cart_ids[]"]').first().attr().value
     }
     
-    checkout = async() => {
-        this.log('Start checkout')
-    
+    initiateCheckout = async() => {
         // initiate checkout
         const initiateCheckoutResponse = await this.got.post(
             `https://www.etsy.com/cart/${this.cartId}/checkout/?payment_method=cc`,
@@ -218,7 +217,9 @@ export class Task {
     
         this.guestToken = initiateCheckoutResponse.body.match(/guest_token"\s*:\s*"(.+?)"/)![1]
         this.log('Fetched task guest token')
-        
+    }
+
+    submitShipping = async() => {
         const submitShippingResponse = await this.got.post(
             `https://www.etsy.com/api/v3/ajax/public/guest/${this.guestToken}/cart/${this.cartId}/address/shipping`,
             {
@@ -253,7 +254,9 @@ export class Task {
         )
     
         this.log('Submitted shipping')
-    
+    }
+
+    getPaymentToken = async() => {
         const getPaymentTokenResponse = await this.got(
             `https://www.etsy.com/api/v3/ajax/public/guest/payments/user-id-params?cart_id=${this.cartId}&guest_token=${this.guestToken}`,
             {
@@ -263,20 +266,15 @@ export class Task {
             }
         )
     
-        this.paymentToken = getPaymentTokenResponse.body.replace('"', '')
+        this.paymentToken = getPaymentTokenResponse.body.replaceAll('"', '')
     
         this.log('Got payment token 1')
-    
-        const tokenizeOptionsResponse = await this.got(
-            `https://prod.etsypayments.com/tokenize`,
-            {
-                'method': 'OPTIONS'
-            }
-        )
+        await new Promise(r => setTimeout(r, 5000));
     
         // TODO fix 429 error here. maybe it is because csrf token was used too many times?
         const tokenizePaymentResponse = await this.got.post(
             `https://prod.etsypayments.com/tokenize`,
+            //`https://enxphblmmtwyis.m.pipedream.net`,
             {
                 form: {
                     card_number: this.profile.card_number,
@@ -294,7 +292,9 @@ export class Task {
         this.paymentToken = tokenizePaymentResponse.body.data
     
         this.log('Got payment token 2')
-    
+    }
+
+    submitPayment = async() => {
         const submitPaymentResponse = await this.got.post(
             `https://www.etsy.com/api/v3/ajax/public/guest/${this.guestToken}/cart/${this.cartId}/credit-card`,
             {
@@ -316,5 +316,16 @@ export class Task {
         )
     
         this.log(String(submitPaymentResponse.body))
+    }
+
+    checkout = async() => {
+        this.log('Start checkout')
+        await this.initiateCheckout()
+        await new Promise(r => setTimeout(r, 10000));
+        await this.submitShipping()
+        await new Promise(r => setTimeout(r, 10000));
+        await this.getPaymentToken()
+        await new Promise(r => setTimeout(r, 10000));
+        await this.submitPayment()
     }
 }
